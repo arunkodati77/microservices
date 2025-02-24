@@ -1,10 +1,40 @@
 pipeline {
     agent any
     environment {
-        DOCKER_HUB_CREDS = credentials('docker-hub-credentials') // Store in Jenkins
-        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        DOCKER_HUB_CREDS = credentials('docker-hub-credentials') // Docker Hub creds stored in Jenkins
+        IMAGE_TAG = "${env.BUILD_NUMBER}" // Build number as image tag
     }
     stages {
+        stage('Setup Tools') {
+            steps {
+                sh '''
+                # Update package list
+                apt-get update
+                
+                # Install Maven
+                apt-get install -y maven
+                
+                # Install Docker
+                apt-get install -y docker.io
+                usermod -aG docker jenkins  # Ensure jenkins user can run docker
+                
+                # Install Helm
+                curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+                chmod +x get_helm.sh && ./get_helm.sh
+                
+                # Install Trivy
+                apt-get install -y wget
+                wget https://github.com/aquasecurity/trivy/releases/download/v0.51.1/trivy_0.51.1_Linux-64bit.deb
+                dpkg -i trivy_0.51.1_Linux-64bit.deb
+                
+                # Verify installations
+                mvn --version
+                docker --version
+                helm version
+                trivy --version
+                '''
+            }
+        }
         stage('Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/arunkodati77/microservices.git'
@@ -47,16 +77,34 @@ pipeline {
         }
         stage('Deploy to Kubernetes') {
             steps {
-                sh 'helm upgrade --install microservices-app ./helm --set inventory-service.image.tag=${IMAGE_TAG} --set order-service.image.tag=${IMAGE_TAG} --namespace my-app --create-namespace'
+                sh '''
+                # Configure Docker to use Minikube's daemon (for local builds)
+                eval $(minikube -p minikube docker-env)
+                
+                # Deploy with Helm
+                helm upgrade --install microservices-app ./helm \
+                    --set inventory-service.image.tag=${IMAGE_TAG} \
+                    --set order-service.image.tag=${IMAGE_TAG} \
+                    --namespace my-app --create-namespace
+                '''
             }
         }
     }
     post {
         always {
-            jacoco execPattern: '**/target/jacoco.exec', minimumCoverage: '0.80'
+            jacoco(
+                execPattern: '**/target/jacoco.exec',
+                classPattern: '**/target/classes',
+                sourcePattern: '**/src/main/java',
+                minimumLineCoverage: '0.80'
+            )
+        }
+        success {
+            echo 'Pipeline completed successfully! Services deployed to Minikube.'
         }
         failure {
-            sh 'helm rollback microservices-app --namespace my-app'
+            sh 'helm rollback microservices-app --namespace my-app || true' // Ignore failure if no release exists
+            echo 'Pipeline failed. Attempted rollback.'
         }
     }
 }
