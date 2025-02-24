@@ -1,0 +1,16 @@
+# Global values (optional, can be overridden in subcharts)
+global:
+  namespace: default
+
+# Subchart-specific overrides (optional)
+inventory-service:
+  replicaCount: 1
+  image:
+    tag: latest
+
+order-service:
+  replicaCount: 1
+  image:
+    tag: latest
+  env:
+    inventoryServiceUrl: "http://inventory-service:80"

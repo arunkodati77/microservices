@@ -1,0 +1,12 @@
+apiVersion: v2
+name: microservices
+description: Parent chart for Order and Inventory Services
+type: application
+version: 0.1.0
+dependencies:
+  - name: inventory-service
+    version: "0.1.0"
+    repository: "file://./charts/inventory-service-chart"
+  - name: order-service
+    version: "0.1.0"
+    repository: "file://./charts/order-service-chart"

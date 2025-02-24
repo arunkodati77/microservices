@@ -1,0 +1,9 @@
+dependencies:
+- name: inventory-service
+  repository: file://./charts/inventory-service-chart
+  version: 0.1.0
+- name: order-service
+  repository: file://./charts/order-service-chart
+  version: 0.1.0
+digest: sha256:f1214f6fb2bc68f36a8b5f91bcf1dc84c7a9cd035c39c82616bbd576e0a4b70d
+generated: "2025-02-23T20:51:39.334443-05:00"
