@@ -7,32 +7,22 @@ pipeline {
     stages {
         stage('Setup Tools') {
             steps {
-                sh '''
-                # Update package list
-                apt-get update
-                
-                # Install Maven
-                apt-get install -y maven
-                
-                # Install Docker
-                apt-get install -y docker.io
-                usermod -aG docker jenkins  # Ensure jenkins user can run docker
-                
-                # Install Helm
-                curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
-                chmod +x get_helm.sh && ./get_helm.sh
-                
-                # Install Trivy
-                apt-get install -y wget
-                wget https://github.com/aquasecurity/trivy/releases/download/v0.51.1/trivy_0.51.1_Linux-64bit.deb
-                dpkg -i trivy_0.51.1_Linux-64bit.deb
-                
-                # Verify installations
-                mvn --version
-                docker --version
-                helm version
-                trivy --version
-                '''
+                script {
+                    // Run as root using docker exec to install tools
+                    sh '''
+                    docker exec -u root ${DOCKER_CONTAINER_ID:-$(docker ps -q -f name=jenkins)} bash -c "
+                        apt-get update && \
+                        apt-get install -y maven docker.io wget && \
+                        usermod -aG docker jenkins && \
+                        curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 && \
+                        chmod +x get_helm.sh && ./get_helm.sh && \
+                        wget https://github.com/aquasecurity/trivy/releases/download/v0.51.1/trivy_0.51.1_Linux-64bit.deb && \
+                        dpkg -i trivy_0.51.1_Linux-64bit.deb && \
+                        curl -LO https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl && \
+                        chmod +x kubectl && mv kubectl /usr/local/bin/ && \
+                        mvn --version && docker --version && helm version && trivy --version && kubectl version --client"
+                    '''
+                }
             }
         }
         stage('Checkout') {
@@ -78,8 +68,11 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                # Configure Docker to use Minikube's daemon (for local builds)
+                # Use Minikube's Docker daemon for local builds
                 eval $(minikube -p minikube docker-env)
+                
+                # Ensure kubectl uses Minikube context
+                kubectl config use-context minikube
                 
                 # Deploy with Helm
                 helm upgrade --install microservices-app ./helm \
