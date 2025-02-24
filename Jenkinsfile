@@ -7,30 +7,35 @@ pipeline {
     stages {
         stage('Setup Tools') {
             steps {
-                sh '''
-                # Install tools as root inside the container
-                apt-get update
-                apt-get install -y maven wget
-                
-                # Install Helm
-                curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
-                chmod +x get_helm.sh && ./get_helm.sh
-                
-                # Install Trivy
-                wget https://github.com/aquasecurity/trivy/releases/download/v0.51.1/trivy_0.51.1_Linux-64bit.deb
-                dpkg -i trivy_0.51.1_Linux-64bit.deb
-                
-                # Install kubectl
-                curl -LO https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl
-                chmod +x kubectl && mv kubectl /usr/local/bin/
-                
-                # Verify installations
-                mvn --version
-                docker --version
-                helm version
-                trivy --version
-                kubectl version --client
-                '''
+                script {
+                    // Use sudo inside the container; install sudo first if needed
+                    sh '''
+                    # Ensure sudo is available, install as root if missing
+                    apt-get update || (docker exec -u root ${DOCKER_CONTAINER_ID:-$(docker ps -q -f name=jenkins)} apt-get update && apt-get install -y sudo)
+                    
+                    # Install tools with sudo
+                    sudo apt-get install -y maven wget
+                    
+                    # Install Helm
+                    curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+                    chmod +x get_helm.sh && sudo ./get_helm.sh
+                    
+                    # Install Trivy
+                    sudo wget https://github.com/aquasecurity/trivy/releases/download/v0.51.1/trivy_0.51.1_Linux-64bit.deb
+                    sudo dpkg -i trivy_0.51.1_Linux-64bit.deb
+                    
+                    # Install kubectl
+                    sudo curl -LO https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl
+                    sudo chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+                    
+                    # Verify installations
+                    mvn --version
+                    docker --version
+                    helm version
+                    trivy --version
+                    kubectl version --client
+                    '''
+                }
             }
         }
         stage('Checkout') {
